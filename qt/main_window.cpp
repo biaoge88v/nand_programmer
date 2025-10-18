@@ -560,6 +560,34 @@ void MainWindow::slotProgWrite()
     int index;
     QString chipName;
 
+    // Get the currently selected chip index and name
+    index = ui->chipSelectComboBox->currentIndex();
+    chipName = ui->chipSelectComboBox->currentText();
+
+    // Verify if a valid chip is selected
+    if (index <= CHIP_INDEX_DEFAULT || chipName.isEmpty() || chipName == CHIP_NAME_DEFAULT)
+    {
+        qInfo() << "No valid chip selected or recognized";
+        QMessageBox::warning(this, tr("Warning"), tr("Please select or detect a valid chip first"));
+        return;
+    }
+
+    // Add a confirmation dialog with the chip name
+    QMessageBox msgBox(this);
+    msgBox.setWindowTitle(tr("Confirm Write"));
+    // Display the recognized chip name in the confirmation message
+    msgBox.setText(tr("Are you sure you want to write data to chip [%1]?\nThis operation may overwrite existing data in the chip.").arg(chipName));
+    msgBox.setIcon(QMessageBox::Warning);
+    msgBox.setStandardButtons(QMessageBox::Ok | QMessageBox::Cancel);
+    msgBox.setDefaultButton(QMessageBox::Cancel);
+
+    // Exit the function if the user clicks Cancel
+    if (msgBox.exec() != QMessageBox::Ok)
+    {
+        qInfo() << "User canceled the write operation";
+        return;
+    }
+
     workFile.setFileName(ui->filePathLineEdit->text());
     if (!workFile.open(QIODevice::ReadOnly))
     {
@@ -573,17 +601,9 @@ void MainWindow::slotProgWrite()
         return;
     }
 
-    index = ui->chipSelectComboBox->currentIndex();
-    if (index <= CHIP_INDEX_DEFAULT)
-    {
-        qInfo() << "Chip is not selected";
-        return;
-    }
-
-    chipName = ui->chipSelectComboBox->currentText();
     pageSize = prog->isIncSpare() ?
-        currentChipDb->extendedPageSizeGetByName(chipName) :
-        currentChipDb->pageSizeGetByName(chipName);
+                   currentChipDb->extendedPageSizeGetByName(chipName) :
+                   currentChipDb->pageSizeGetByName(chipName);
     if (!pageSize)
     {
         qInfo() << "Chip page size is unknown";
@@ -591,8 +611,8 @@ void MainWindow::slotProgWrite()
     }
 
     quint64 start_address =
-            ui->blockSizeValueLabel->text().toULongLong(nullptr, 16)
-            * ui->firstSpinBox->value();
+        ui->blockSizeValueLabel->text().toULongLong(nullptr, 16)
+        * ui->firstSpinBox->value();
 
     areaSize = workFile.size();
 
@@ -602,25 +622,24 @@ void MainWindow::slotProgWrite()
     }
 
     quint64 setSize =
-            ui->blockSizeValueLabel->text().toULongLong(nullptr, 16)
+        ui->blockSizeValueLabel->text().toULongLong(nullptr, 16)
             * (ui->lastSpinBox->value() + 1) - start_address;
 
     if (setSize < areaSize)
         areaSize = setSize;
 
-    qInfo() << "Writing data ...";
+    qInfo() << "Writing data to chip [" << chipName << "] ...";
 
     connect(prog, SIGNAL(writeChipCompleted(int)), this,
-        SLOT(slotProgWriteCompleted(int)));
+            SLOT(slotProgWriteCompleted(int)));
     connect(prog, SIGNAL(writeChipProgress(quint64)), this,
-        SLOT(slotProgWriteProgress(quint64)));
+            SLOT(slotProgWriteProgress(quint64)));
 
     ui->filePathLineEdit->setDisabled(true);
     ui->selectFilePushButton->setDisabled(true);
 
-    buffer.buf.reserve(pageSize);
-    buffer.buf.resize(pageSize);
-    qint64 readSize = workFile.read((char *)buffer.buf.data(), (qint64)pageSize);
+    buffer.resize(pageSize);
+    qint64 readSize = workFile.read((char *)buffer.data(), pageSize);
     if (readSize < 0)
     {
         qCritical() << "Failed to read file";
@@ -633,10 +652,8 @@ void MainWindow::slotProgWrite()
     }
     else if (readSize < pageSize)
     {
-        std::fill(buffer.buf.begin() + readSize, buffer.buf.end(), 0xFF);
+        std::fill(buffer.data() + readSize, buffer.data() + pageSize, 0xFF);
     }
-
-    buffer.ready = true;
     prog->writeChip(&buffer, start_address, areaSize, pageSize);
 }
 
