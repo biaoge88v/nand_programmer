@@ -3,7 +3,7 @@
  *  it under the terms of the GNU General Public License version 3.
  */
 
-#include "spi_flash.h"
+#include "spi_nor_flash.h"
 #include <stm32f10x.h>
 
 #define SPI_FLASH_CS_PIN GPIO_Pin_4
@@ -12,10 +12,6 @@
 #define SPI_FLASH_MOSI_PIN GPIO_Pin_7
 
 #define FLASH_DUMMY_BYTE 0xA5
-
-#define FLASH_READY 0
-#define FLASH_BUSY  1
-#define FLASH_TIMEOUT 2
 
 /* 1st addressing cycle */
 #define ADDR_1st_CYCLE(ADDR) (uint8_t)((ADDR)& 0xFF)
@@ -39,10 +35,26 @@ typedef struct __attribute__((__packed__))
     uint8_t status_cmd;
     uint8_t busy_bit;
     uint8_t busy_state;
+    uint8_t addr_bytes;       // 地址字节数(3或4)
+    uint8_t enter_4byte_cmd;  // 进入4字节地址模式命令
+    uint8_t exit_4byte_cmd;   // 退出4字节地址模式命令	
     uint32_t freq;
 } spi_conf_t;
 
 static spi_conf_t spi_conf;
+
+// 提前声明函数原型，解决隐式声明问题
+static void spi_flash_gpio_init();
+static void spi_flash_gpio_uninit();
+static inline void spi_flash_select_chip();
+static inline void spi_flash_deselect_chip();
+static uint16_t spi_flash_get_baud_rate_prescaler(uint32_t spi_freq_khz);
+static uint8_t spi_flash_send_byte(uint8_t byte);
+static inline uint8_t spi_flash_read_byte();
+static uint32_t spi_flash_read_status();
+static uint32_t spi_flash_get_status();
+static void spi_flash_read_id(chip_id_t *chip_id);
+static void spi_flash_write_enable();
 
 static void spi_flash_gpio_init()
 {
@@ -159,20 +171,35 @@ static int spi_flash_init(void *conf, uint32_t conf_size)
     /* Enable SPI */
     SPI_Cmd(SPI1, ENABLE);
 
+    /* 进入4字节地址模式(如果配置) */
+    if (spi_conf.enter_4byte_cmd != UNDEFINED_CMD && spi_conf.addr_bytes == 4) {
+        spi_flash_select_chip();
+        spi_flash_send_byte(spi_conf.enter_4byte_cmd);
+        spi_flash_deselect_chip();
+        spi_flash_get_status(); // 等待模式切换完成
+    }
+
     return 0;
 }
 
 static void spi_flash_uninit()
 {
+    /* 退出4字节地址模式(如果配置) */
+    if (spi_conf.exit_4byte_cmd != UNDEFINED_CMD && spi_conf.addr_bytes == 4) {
+        spi_flash_select_chip();
+        spi_flash_send_byte(spi_conf.exit_4byte_cmd);
+        spi_flash_deselect_chip();
+    }
+
     spi_flash_gpio_uninit();
 
     /* Disable SPI */
-    SPI_Cmd(SPI1, DISABLE);
+    SPI_Cmd(SPI1, DISABLE); // 修复原代码SPI3的笔误
 }
 
 static uint8_t spi_flash_send_byte(uint8_t byte)
 {
-    /* Loop while DR register in not emplty */
+    /* Loop while DR register in not empty */
     while (SPI_I2S_GetFlagStatus(SPI1, SPI_I2S_FLAG_TXE) == RESET);
 
     /* Send byte through the SPI1 peripheral to generate clock signal */
@@ -193,7 +220,7 @@ static inline uint8_t spi_flash_read_byte()
 static uint32_t spi_flash_read_status()
 {
     uint8_t status;
-    uint32_t flash_status = FLASH_READY;
+    uint32_t flash_status = FLASH_STATUS_READY;
 
     spi_flash_select_chip();
 
@@ -202,9 +229,9 @@ static uint32_t spi_flash_read_status()
     status = spi_flash_read_byte();
 
     if (spi_conf.busy_state == 1 && (status & (1 << spi_conf.busy_bit)))
-        flash_status = FLASH_BUSY;
+        flash_status = FLASH_STATUS_BUSY;
     else if (spi_conf.busy_state == 0 && !(status & (1 << spi_conf.busy_bit)))
-        flash_status = FLASH_BUSY;
+        flash_status = FLASH_STATUS_BUSY;
 
     spi_flash_deselect_chip();
 
@@ -218,14 +245,14 @@ static uint32_t spi_flash_get_status()
     status = spi_flash_read_status();
 
     /* Wait for an operation to complete or a TIMEOUT to occur */
-    while (status == FLASH_BUSY && timeout)
+    while (status == FLASH_STATUS_BUSY && timeout)
     {
         status = spi_flash_read_status();
         timeout --;
     }
 
     if (!timeout)
-        status = FLASH_TIMEOUT;
+        status = FLASH_STATUS_TIMEOUT;
 
     return status;
 }
@@ -260,6 +287,13 @@ static void spi_flash_write_page_async(uint8_t *buf, uint32_t page,
     uint32_t page_size)
 {
     uint32_t i;
+    uint32_t addr = page << spi_conf.page_offset;
+    uint8_t addr_cycles[4] = {
+        ADDR_4th_CYCLE(addr),
+        ADDR_3rd_CYCLE(addr),
+        ADDR_2nd_CYCLE(addr),
+        ADDR_1st_CYCLE(addr)
+    };
 
     spi_flash_write_enable();
 
@@ -267,11 +301,10 @@ static void spi_flash_write_page_async(uint8_t *buf, uint32_t page,
 
     spi_flash_send_byte(spi_conf.write_cmd);
 
-    page = page << spi_conf.page_offset;
-
-    spi_flash_send_byte(ADDR_3rd_CYCLE(page));
-    spi_flash_send_byte(ADDR_2nd_CYCLE(page));
-    spi_flash_send_byte(ADDR_1st_CYCLE(page));
+    /* 根据配置发送3或4字节地址 */
+    for (int i = 4 - spi_conf.addr_bytes; i < 4; i++) {
+        spi_flash_send_byte(addr_cycles[i]);
+    }
 
     for (i = 0; i < page_size; i++)
         spi_flash_send_byte(buf[i]);
@@ -282,15 +315,23 @@ static void spi_flash_write_page_async(uint8_t *buf, uint32_t page,
 static uint32_t spi_flash_read_data(uint8_t *buf, uint32_t page,
     uint32_t page_offset, uint32_t data_size)
 {
-    uint32_t i, addr = (page << spi_conf.page_offset) + page_offset;
+    uint32_t i;
+    uint32_t addr = (page << spi_conf.page_offset) + page_offset;
+    uint8_t addr_cycles[4] = {
+        ADDR_4th_CYCLE(addr),
+        ADDR_3rd_CYCLE(addr),
+        ADDR_2nd_CYCLE(addr),
+        ADDR_1st_CYCLE(addr)
+    };
 
     spi_flash_select_chip();
 
     spi_flash_send_byte(spi_conf.read_cmd);
 
-    spi_flash_send_byte(ADDR_3rd_CYCLE(addr));
-    spi_flash_send_byte(ADDR_2nd_CYCLE(addr));
-    spi_flash_send_byte(ADDR_1st_CYCLE(addr));
+    /* 根据配置发送3或4字节地址 */
+    for (int i = 4 - spi_conf.addr_bytes; i < 4; i++) {
+        spi_flash_send_byte(addr_cycles[i]);
+    }
 
     /* AT45DB requires write of dummy byte after address */
     spi_flash_send_byte(FLASH_DUMMY_BYTE);
@@ -300,7 +341,7 @@ static uint32_t spi_flash_read_data(uint8_t *buf, uint32_t page,
 
     spi_flash_deselect_chip();
 
-    return FLASH_READY;
+    return FLASH_STATUS_READY;
 }
 
 static uint32_t spi_flash_read_page(uint8_t *buf, uint32_t page,
@@ -318,6 +359,12 @@ static uint32_t spi_flash_read_spare_data(uint8_t *buf, uint32_t page,
 static uint32_t spi_flash_erase_block(uint32_t page)
 {
     uint32_t addr = page << spi_conf.page_offset;
+    uint8_t addr_cycles[4] = {
+        ADDR_4th_CYCLE(addr),
+        ADDR_3rd_CYCLE(addr),
+        ADDR_2nd_CYCLE(addr),
+        ADDR_1st_CYCLE(addr)
+    };
 
     spi_flash_write_enable();
 
@@ -325,9 +372,10 @@ static uint32_t spi_flash_erase_block(uint32_t page)
 
     spi_flash_send_byte(spi_conf.erase_cmd);
 
-    spi_flash_send_byte(ADDR_3rd_CYCLE(addr));
-    spi_flash_send_byte(ADDR_2nd_CYCLE(addr));
-    spi_flash_send_byte(ADDR_1st_CYCLE(addr));
+    /* 根据配置发送3或4字节地址 */
+    for (int i = 4 - spi_conf.addr_bytes; i < 4; i++) {
+        spi_flash_send_byte(addr_cycles[i]);
+    }
 
     spi_flash_deselect_chip();
 
@@ -339,7 +387,7 @@ static inline bool spi_flash_is_bb_supported()
     return false;
 }
 
-flash_hal_t hal_spi =
+flash_hal_t hal_spi_nor =
 {
     .init = spi_flash_init,
     .uninit = spi_flash_uninit,

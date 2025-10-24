@@ -11,7 +11,8 @@
 #include "log.h"
 #include "version.h"
 #include "flash.h"
-#include "spi_flash.h"
+#include "spi_nor_flash.h"
+#include "spi_nand_flash.h"
 #include <stdio.h>
 #include <string.h>
 #include <stddef.h>
@@ -19,7 +20,7 @@
 #include <inttypes.h>
 
 #define NP_PACKET_BUF_SIZE 64
-#define NP_MAX_PAGE_SIZE 0x21C0 /* 8KB + 448 spare */
+#define NP_MAX_PAGE_SIZE 0x22E8 /* 8KB + 744 spare */
 #define NP_WRITE_ACK_BYTES 1984
 #define NP_NAND_TIMEOUT 0x1000000
 
@@ -157,8 +158,6 @@ typedef struct __attribute__((__packed__))
     chip_id_t nand_id;
 } np_resp_id_t;
 
-/* BB, write ack and error responses are aligned to the same size to avoid
- * receiver wait for additional data */
 typedef struct __attribute__((__packed__))
 {
     np_resp_t header;
@@ -170,14 +169,12 @@ typedef struct __attribute__((__packed__))
 {
     np_resp_t header;
     uint64_t bytes_ack;
-    uint8_t dummy[4];
 } np_resp_write_ack_t;
 
 typedef struct __attribute__((__packed__))
 {
     np_resp_t header;
     uint8_t err_code;
-    uint8_t dummy[11];
 } np_resp_err_t;
 
 typedef struct __attribute__((__packed__))
@@ -257,7 +254,7 @@ typedef struct
 static np_comm_cb_t *np_comm_cb;
 static np_prog_t prog;
 
-static flash_hal_t *hal[] = { &hal_fsmc, &hal_spi };
+static flash_hal_t *hal[] = { &hal_fsmc, &hal_spi_nor, &hal_spi_nand };
 
 uint8_t np_packet_send_buf[NP_PACKET_BUF_SIZE];
 
@@ -321,9 +318,9 @@ static int _np_cmd_nand_read_id(np_prog_t *prog)
     if (np_comm_cb)
         np_comm_cb->send((uint8_t *)&resp, resp_len);
 
-    DEBUG_PRINT("Chip ID: 0x%x 0x%x 0x%x 0x%x 0x%x\r\n",
+    DEBUG_PRINT("Chip ID: 0x%x 0x%x 0x%x 0x%x 0x%x 0x%x\r\n",
         resp.nand_id.maker_id, resp.nand_id.device_id, resp.nand_id.third_id,
-        resp.nand_id.fourth_id, resp.nand_id.fifth_id);
+        resp.nand_id.fourth_id, resp.nand_id.fifth_id, resp.nand_id.sixth_id);
 
     return 0;
 }
