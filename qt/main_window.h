@@ -8,7 +8,8 @@
 
 #include "programmer.h"
 #include "parallel_chip_db.h"
-#include "spi_chip_db.h"
+#include "spi_nor_db.h"
+#include "spi_nand_db.h"
 #include <QMainWindow>
 #include <QVector>
 #include <QElapsedTimer>
@@ -28,10 +29,11 @@ public:
 
 private:
     Ui::MainWindow *ui;
-    SyncBuffer buffer;
+    QVector<uint8_t> buffer;
     ChipId chipId;
     ParallelChipDb parallelChipDb;
-    SpiChipDb spiChipDb;
+    SpiNorDb spiNorDb;
+    SpiNandDb spiNandDb;
     ChipDb *currentChipDb;
     QElapsedTimer timer;
     bool isAlertEnabled;
@@ -83,7 +85,8 @@ public slots:
     void slotDetectChip();
     void slotSettingsProgrammer();
     void slotSettingsParallelChipDb();
-    void slotSettingsSpiChipDb();
+    void slotSettingsSpiNorDb();
+    void slotSettingsSpiNandDb();
     void slotAboutDialog();
     void slotFirmwareUpdateDialog();
 };

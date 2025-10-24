@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
- <class>ParallelChipDbDialog</class>
- <widget class="QDialog" name="ParallelChipDbDialog">
+ <class>SpiNandDbDialog</class>
+ <widget class="QDialog" name="SpiNandDbDialog">
   <property name="windowModality">
    <enum>Qt::ApplicationModal</enum>
   </property>
@@ -26,7 +26,7 @@
    </size>
   </property>
   <property name="windowTitle">
-   <string>NAND Flash数据库</string>
+   <string>SPI NAND数据库</string>
   </property>
   <layout class="QGridLayout" name="gridLayout_2">
    <item row="0" column="0">
@@ -175,7 +175,7 @@
   <connection>
    <sender>okCancelButtonBox</sender>
    <signal>accepted()</signal>
-   <receiver>ParallelChipDbDialog</receiver>
+   <receiver>SpiNandDbDialog</receiver>
    <slot>accept()</slot>
    <hints>
     <hint type="sourcelabel">
@@ -191,7 +191,7 @@
   <connection>
    <sender>okCancelButtonBox</sender>
    <signal>rejected()</signal>
-   <receiver>ParallelChipDbDialog</receiver>
+   <receiver>SpiNandDbDialog</receiver>
    <slot>reject()</slot>
    <hints>
     <hint type="sourcelabel">

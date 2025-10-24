@@ -11,7 +11,7 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>NANDO Programmer</string>
+   <string>NANDO Programmer  v4.1.0 彪哥汉化 </string>
   </property>
   <property name="windowIcon">
    <iconset resource="icons.qrc">
@@ -80,7 +80,7 @@
          </sizepolicy>
         </property>
         <property name="text">
-         <string>Chip ID:</string>
+         <string>芯片 ID:</string>
         </property>
        </widget>
       </item>
@@ -106,7 +106,7 @@
          </size>
         </property>
         <property name="text">
-         <string>Select chip:</string>
+         <string>选择芯片:</string>
         </property>
        </widget>
       </item>
@@ -123,12 +123,12 @@
         </property>
         <property name="maximumSize">
          <size>
-          <width>66</width>
+          <width>68</width>
           <height>16777215</height>
          </size>
         </property>
         <property name="text">
-         <string>Detect</string>
+         <string>识别芯片</string>
         </property>
        </widget>
       </item>
@@ -210,7 +210,7 @@
            </sizepolicy>
           </property>
           <property name="text">
-           <string>Log:</string>
+           <string>日志:</string>
           </property>
          </widget>
         </item>
@@ -226,7 +226,7 @@
       <item row="1" column="1">
        <widget class="QLabel" name="label_2">
         <property name="text">
-         <string>Work file:</string>
+         <string>当前文件路径:</string>
         </property>
        </widget>
       </item>
@@ -236,7 +236,7 @@
       <item row="1" column="0">
        <widget class="QPushButton" name="selectFilePushButton">
         <property name="text">
-         <string>Select File</string>
+         <string>选择文件</string>
         </property>
        </widget>
       </item>
@@ -260,14 +260,14 @@
       <item row="1" column="0">
        <widget class="QLabel" name="firstLabel">
         <property name="text">
-         <string>First block:</string>
+         <string>起始块:</string>
         </property>
        </widget>
       </item>
       <item row="1" column="2">
        <widget class="QLabel" name="lastLabel">
         <property name="text">
-         <string>Last block:</string>
+         <string>结束块:</string>
         </property>
        </widget>
       </item>
@@ -280,7 +280,7 @@
       <item row="1" column="4">
        <widget class="QLabel" name="blockSizeLabel">
         <property name="text">
-         <string>Block size:</string>
+         <string>数据块大小:</string>
         </property>
        </widget>
       </item>
@@ -306,11 +306,12 @@
    </property>
    <widget class="QMenu" name="menuSettings">
     <property name="title">
-     <string>Settings</string>
+     <string>设置</string>
     </property>
     <addaction name="actionProgrammer"/>
     <addaction name="actionParallelChipDb"/>
-    <addaction name="actionSpiChipDb"/>
+    <addaction name="actionSpiNorDb"/>
+    <addaction name="actionSpiNandDb"/>
     <addaction name="separator"/>
     <addaction name="actionFirmwareUpdate"/>
    </widget>
@@ -335,7 +336,7 @@
    </attribute>
    <addaction name="actionConnect"/>
   </widget>
-  <widget class="QStatusBar" name="statusBar"/>
+  <!-- 保留唯一的工具栏定义 -->
   <widget class="QToolBar" name="toolBar">
    <property name="windowTitle">
     <string>toolBar</string>
@@ -356,17 +357,20 @@
    <addaction name="actionErase"/>
    <addaction name="actionReadBadBlocks"/>
   </widget>
+  <!-- 保留唯一的statusBar -->
+  <widget class="QStatusBar" name="statusBar"/>
+  
   <action name="actionReadId">
    <property name="enabled">
     <bool>false</bool>
    </property>
    <property name="text">
-    <string>Read ID</string>
+    <string>读取 ID</string>
    </property>
   </action>
   <action name="actionConnect">
    <property name="text">
-    <string>Connect</string>
+    <string>连接编程器</string>
    </property>
   </action>
   <action name="actionRead">
@@ -374,7 +378,7 @@
     <bool>false</bool>
    </property>
    <property name="text">
-    <string>Read</string>
+    <string>读取</string>
    </property>
   </action>
   <action name="actionWrite">
@@ -382,7 +386,7 @@
     <bool>false</bool>
    </property>
    <property name="text">
-    <string>Write</string>
+    <string>写入</string>
    </property>
   </action>
   <action name="actionErase">
@@ -390,12 +394,12 @@
     <bool>false</bool>
    </property>
    <property name="text">
-    <string>Erase</string>
+    <string>擦除</string>
    </property>
   </action>
   <action name="actionProgrammer">
    <property name="text">
-    <string>Programmer</string>
+    <string>编程器设置</string>
    </property>
   </action>
   <action name="actionVerify">
@@ -403,7 +407,7 @@
     <bool>false</bool>
    </property>
    <property name="text">
-    <string>Verify</string>
+    <string>校验</string>
    </property>
   </action>
   <action name="actionReadBadBlocks">
@@ -411,17 +415,17 @@
     <bool>false</bool>
    </property>
    <property name="text">
-    <string>Read bad blocks</string>
+    <string>读取坏块</string>
    </property>
   </action>
   <action name="actionParallelChipDb">
    <property name="text">
-    <string>Parallel chip database</string>
+    <string>Nand Flash数据库</string>
    </property>
   </action>
   <action name="actionAbout">
    <property name="text">
-    <string>About NANDO</string>
+    <string>关于 NANDO</string>
    </property>
   </action>
   <action name="actionFirmwareUpdate">
@@ -429,12 +433,20 @@
     <bool>false</bool>
    </property>
    <property name="text">
-    <string>Firmware update</string>
+    <string>更新固件</string>
    </property>
   </action>
-  <action name="actionSpiChipDb">
+  <action name="actionSpiNandDb">
    <property name="text">
-    <string>SPI chip database</string>
+    <string>SPI NAND数据库</string>
+   </property>
+  </action>
+  <action name="actionSpiNorDb">
+   <property name="text">
+    <string>SPI NOR数据库</string>
+   </property>
+   <property name="toolTip">
+    <string>SPI NOR database</string>
    </property>
   </action>
  </widget>

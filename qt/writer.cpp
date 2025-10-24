@@ -15,15 +15,13 @@ Writer::Writer()
 
 Writer::~Writer()
 {
-    stop();
 }
 
-void Writer::init(const QString &portName, qint32 baudRate, SyncBuffer *buf,
+void Writer::init(SerialPort *serialPort, QVector<uint8_t> *buf,
     quint64 addr, quint64 len, uint32_t pageSize, bool skipBB, bool incSpare,
     bool enableHwEcc, uint8_t startCmd, uint8_t dataCmd, uint8_t endCmd)
 {
-    this->portName = portName;
-    this->baudRate = baudRate;
+    this->serialPort = serialPort;
     this->buf = buf;
     this->addr = addr;
     this->len = len;
@@ -37,7 +35,6 @@ void Writer::init(const QString &portName, qint32 baudRate, SyncBuffer *buf,
     bytesWritten = 0;
     bytesAcked = 0;
     offset = 0;
-    restartRead = false;
 }
 
 int Writer::write(char *data, uint32_t dataLen)
@@ -49,7 +46,7 @@ int Writer::write(char *data, uint32_t dataLen)
         return -1;
     else if (static_cast<uint32_t>(ret) < dataLen)
     {
-        logErr(QString("Data was partialy written, returned %1, expected %2")
+        logErr(QString("数据部分写入，返回 %1, 应为 %2")
             .arg(ret).arg(dataLen));
         return -1;
     }
@@ -62,7 +59,7 @@ int Writer::read(char *data, uint32_t dataLen)
     std::function<void(int)> cb = std::bind(&Writer::readCb, this,
         std::placeholders::_1);
 
-    if (serialPort->asyncReadWithTimeout(data, dataLen, cb, READ_ACK_TIMEOUT)
+    if (serialPort->asyncRead(data, dataLen, cb, READ_ACK_TIMEOUT)
         < 0)
     {
         return -1;
@@ -77,15 +74,14 @@ int Writer::handleWriteAck(RespHeader *header, uint32_t len)
 
     if (len < static_cast<uint32_t>(size))
     {
-        logErr(QString("Write ack response is too short %1").arg(len));
-        return -1;
+        return 0;
     }
 
     bytesAcked = (reinterpret_cast<RespWriteAck *>(header))->ackBytes;
 
     if (bytesAcked != bytesWritten)
     {
-        logErr(QString("Received wrong ack %1, expected %2 ").arg(bytesAcked)
+        logErr(QString("收到错误的ack %1, 应为 %2 ").arg(bytesAcked)
             .arg(bytesWritten));
         return -1;
     }
@@ -99,18 +95,14 @@ int Writer::handleBadBlock(RespHeader *header, uint32_t len, bool isSkipped)
 {
     int size = sizeof(RespBadBlock);
     RespBadBlock *badBlock = reinterpret_cast<RespBadBlock *>(header);
-    QString message = isSkipped ? "Skipped bad block at 0x%1 size 0x%2" :
-        "Bad block at 0x%1 size 0x%2";
+    QString message = isSkipped ? "跳过位于 0x%1 大小为 0x%2 的坏块" :
+        "坏块位于 0x%1 大小为 0x%2";
 
     if (len < static_cast<uint32_t>(size))
         return 0;
 
     logInfo(message.arg(badBlock->addr, 8, 16, QLatin1Char('0'))
         .arg(badBlock->size, 8, 16, QLatin1Char('0')));
-
-    // Bad block notification is received before acknowledge therefore need to restart read.
-    // Need to implement async write to avoid this.
-    restartRead = true;
 
     return size;
 }
@@ -123,7 +115,7 @@ int Writer::handleError(RespHeader *header, uint32_t len)
     if (len < static_cast<uint32_t>(size))
         return 0;
 
-    logErr(QString("Programmer sent error: (%1) %2").arg(err->errCode)
+    logErr(QString("编程器返回错误: (%1) %2").arg(err->errCode)
         .arg(errCode2str(-err->errCode)));
 
     return -1;
@@ -132,7 +124,7 @@ int Writer::handleError(RespHeader *header, uint32_t len)
 int Writer::handleStatus(char *pbuf, uint32_t len)
 {
     RespHeader *header = reinterpret_cast<RespHeader *>(pbuf);
-    uint8_t status = header->info;
+    uint16_t status = header->info;
 
     switch (status)
     {
@@ -148,7 +140,7 @@ int Writer::handleStatus(char *pbuf, uint32_t len)
         return handleWriteAck(header, len);
     }
 
-    logErr(QString("Wrong status received %1").arg(status));
+    logErr(QString("编程器返回错误的响应代码 %1").arg(status));
     return -1;
 }
 
@@ -161,7 +153,7 @@ int Writer::handlePacket(char *pbuf, uint32_t len)
 
     if (header->code != RESP_STATUS)
     {
-        logErr(QString("Programmer returned wrong response code: %1")
+        logErr(QString("编程器返回了错误的响应代码: %1")
             .arg(header->code));
         return -1;
     }
@@ -204,14 +196,6 @@ void Writer::readCb(int size)
 
     if (offset)
     {
-        if (read(pbuf + offset, bufSize - offset) < 0)
-            goto Error;
-        return;
-    }
-
-    if (restartRead)
-    {
-        restartRead = false;
         if (read(pbuf + offset, bufSize - offset) < 0)
             goto Error;
         return;
@@ -275,11 +259,6 @@ int Writer::writeData()
     dataLenMax = bufSize - headerLen;
     cmd = dataCmd;
 
-    // Wait new chunk of data is written to buffer by caller
-    std::unique_lock<std::mutex> lck(buf->mutex);
-    buf->cv.wait(lck, [this] { return this->buf->ready; });
-    buf->ready = false;
-
     while (len)
     {
         dataLen = len < dataLenMax ? len : dataLenMax;
@@ -288,8 +267,8 @@ int Writer::writeData()
         if (dataLen + bytesWritten > pageLim)
             dataLen = pageLim - bytesWritten;
 
-        writeDataCmd->len = static_cast<uint8_t>(dataLen);
-        memcpy(pbuf + headerLen, buf->buf.data() + bufWriten, dataLen);
+        writeDataCmd->len = static_cast<uint16_t>(dataLen);
+        memcpy(pbuf + headerLen, buf->constData() + bufWriten, dataLen);
         if (write(pbuf, headerLen + dataLen))
             return -1;
 
@@ -301,7 +280,7 @@ int Writer::writeData()
             break;
     }
 
-    if (read(pbuf, sizeof(RespWriteAck)))
+    if (read(pbuf, bufSize))
         return -1;
 
     return 0;
@@ -323,43 +302,10 @@ int Writer::writeEnd()
     return 0;
 }
 
-int Writer::serialPortCreate()
-{
-    serialPort = new SerialPort();
-
-    if (!serialPort->start(portName.toLatin1(), baudRate))
-        return -1;
-
-    return 0;
-}
-
-void Writer::serialPortDestroy()
-{
-    if (!serialPort)
-        return;
-    serialPort->stop();
-    delete serialPort;
-    serialPort = nullptr;
-}
-
 void Writer::start()
 {
-    if (serialPortCreate())
-        goto Exit;
-
     if (writeStart())
-        goto Exit;
-
-    return;
-
- Exit:
-    serialPortDestroy();
-    emit result(-1);
-}
-
-void Writer::stop()
-{
-    serialPortDestroy();
+        emit result(-1);
 }
 
 void Writer::logErr(const QString& msg)

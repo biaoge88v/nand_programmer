@@ -13,7 +13,7 @@
 #include "reader.h"
 #include "cmd.h"
 #include "parallel_chip_db.h"
-#include "spi_chip_db.h"
+#include "spi_nor_db.h"
 #include "serial_port.h"
 
 using namespace std;
@@ -42,7 +42,7 @@ class Programmer : public QObject
         { FIRMWARE_IMAGE_1, 0x08004000, 0x00004000, 0x1e000 },
         { FIRMWARE_IMAGE_2, 0x08022000, 0x00022000, 0x1e000 },
     };
-    const uint32_t flashPageSize = 0x800;
+    const uint32_t flashPageSize = 0x100;
 
     SerialPort serialPort;
     QString usbDevName;
@@ -56,12 +56,10 @@ class Programmer : public QObject
     uint8_t activeImage;
     uint8_t updateImage;
     QString firmwareFileName;
-    QByteArray firmwareBuffer;
-    SyncBuffer buffer;
+    QFile FirmwareFile;
+    QVector<uint8_t> buf;
     ChipId *chipId_p;
 
-    int serialPortConnect();
-    void serialPortDisconnect();
     int firmwareImageRead();
     void firmwareUpdateStart();
 
@@ -83,8 +81,8 @@ public:
     void setHwEccEnabled(bool isHwEccEnabled);
     void readChipId(ChipId *chipId);
     void eraseChip(quint64 addr, quint64 len);
-    void readChip(SyncBuffer *buf, quint64 addr, quint64 len, bool isReadLess);
-    void writeChip(SyncBuffer *buf, quint64 addr, quint64 len,
+    void readChip(QVector<uint8_t> *buf, quint64 addr, quint64 len, bool isReadLess);
+    void writeChip(QVector<uint8_t> *buf, quint64 addr, quint64 len,
         uint32_t pageSize);
     void readChipBadBlocks();
     void confChip(ChipInfo *chipInfo);
@@ -120,6 +118,7 @@ private slots:
     void confChipCb(quint64 ret);
     void logCb(QtMsgType msgType, QString msg);
     void connectCb(quint64 ret);
+    void disconnected();
     void getActiveImageCb(quint64 ret);
     void firmwareUpdateCb(int ret);
     void firmwareUpdateProgressCb(quint64 progress);

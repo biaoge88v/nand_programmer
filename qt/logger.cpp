@@ -28,16 +28,16 @@ void Logger::logHandler(QtMsgType type, const QMessageLogContext &context ,
         prefix = "Debug: ";
         break;
     case QtInfoMsg:
-        prefix = "Info: ";
+        prefix = "信息: ";
         break;
     case QtWarningMsg:
-        prefix = "Warning: ";
+        prefix = "警告: ";
         break;
     case QtCriticalMsg:
-        prefix = "Error: ";
+        prefix = "错误: ";
         break;
     case QtFatalMsg:
-        prefix = "Fatal error: ";
+        prefix = "致命错误: ";
         break;
     }
 

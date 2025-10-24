@@ -3,15 +3,15 @@
  *  it under the terms of the GNU General Public License version 3.
  */
 
-#include "parallel_chip_db_dialog.h"
-#include "ui_parallel_chip_db_dialog.h"
+#include "spi_nor_db_dialog.h"
+#include "ui_spi_nor_db_dialog.h"
 
-#define HEADER_LONG_WIDTH 130
-#define HEADER_MED_WIDTH 120
+#define HEADER_LONG_WIDTH 120
+#define HEADER_MED_WIDTH 110
 #define HEADER_SHORT_WIDTH 50
 
-ParallelChipDbDialog::ParallelChipDbDialog(ParallelChipDb *chipDb,
-    QWidget *parent) : QDialog(parent), ui(new Ui::ParallelChipDbDialog),
+SpiNorDbDialog::SpiNorDbDialog(SpiNorDb *chipDb, QWidget *parent) :
+    QDialog(parent), ui(new Ui::SpiNorDbDialog),
     chipDbTableModel(chipDb, parent)
 {
     ui->setupUi(this);
@@ -23,25 +23,17 @@ ParallelChipDbDialog::ParallelChipDbDialog(ParallelChipDb *chipDb,
 
     chipDbProxyModel.setSourceModel(&chipDbTableModel);
     ui->chipDbTableView->setModel(&chipDbProxyModel);
-    ui->chipDbTableView->setColumnWidth(ParallelChipDb::CHIP_PARAM_NAME,
+    ui->chipDbTableView->setColumnWidth(SpiNorDb::CHIP_PARAM_NAME,
         HEADER_LONG_WIDTH);
-    ui->chipDbTableView->setColumnWidth(ParallelChipDb::CHIP_PARAM_PAGE_SIZE,
+    ui->chipDbTableView->setColumnWidth(SpiNorDb::CHIP_PARAM_PAGE_SIZE,
         HEADER_MED_WIDTH);
-    ui->chipDbTableView->setColumnWidth(ParallelChipDb::CHIP_PARAM_BLOCK_SIZE,
+    ui->chipDbTableView->setColumnWidth(SpiNorDb::CHIP_PARAM_BLOCK_SIZE,
         HEADER_MED_WIDTH);
-    ui->chipDbTableView->setColumnWidth(ParallelChipDb::CHIP_PARAM_TOTAL_SIZE,
+    ui->chipDbTableView->setColumnWidth(SpiNorDb::CHIP_PARAM_TOTAL_SIZE,
         HEADER_MED_WIDTH);
-    ui->chipDbTableView->setColumnWidth(ParallelChipDb::CHIP_PARAM_SPARE_SIZE,
-        HEADER_MED_WIDTH);
-    ui->chipDbTableView->setColumnWidth(ParallelChipDb::CHIP_PARAM_BB_MARK_OFF,
-        HEADER_MED_WIDTH);
-    for (int i = ParallelChipDb::CHIP_PARAM_T_CS;
-         i <= ParallelChipDb::CHIP_PARAM_T_REA; i++)
-    {
-        ui->chipDbTableView->setColumnWidth(i, HEADER_SHORT_WIDTH);
-    }
-    for (int i = ParallelChipDb::CHIP_PARAM_ROW_CYCLES;
-         i <= ParallelChipDb::CHIP_PARAM_DISABLE_HW_ECC_VALUE; i++)
+
+    for (int i = SpiNorDb::CHIP_PARAM_PAGE_OFF;
+         i <= SpiNorDb::CHIP_PARAM_FREQ; i++)
     {
         ui->chipDbTableView->setColumnWidth(i, HEADER_MED_WIDTH);
     }
@@ -56,17 +48,17 @@ ParallelChipDbDialog::ParallelChipDbDialog(ParallelChipDb *chipDb,
         SIGNAL(clicked()), this, SLOT(slotCancelButtonClicked()));
 }
 
-ParallelChipDbDialog::~ParallelChipDbDialog()
+SpiNorDbDialog::~SpiNorDbDialog()
 {
     delete ui;
 }
 
-void ParallelChipDbDialog::slotAddChipDbButtonClicked()
+void SpiNorDbDialog::slotAddChipDbButtonClicked()
 {
     chipDbTableModel.addRow();
 }
 
-void ParallelChipDbDialog::slotDelChipDbButtonClicked()
+void SpiNorDbDialog::slotDelChipDbButtonClicked()
 {
     QModelIndexList selection = ui->chipDbTableView->selectionModel()->
         selectedRows();
@@ -77,12 +69,12 @@ void ParallelChipDbDialog::slotDelChipDbButtonClicked()
     chipDbTableModel.delRow(selection.at(0).row());
 }
 
-void ParallelChipDbDialog::slotOkButtonClicked()
+void SpiNorDbDialog::slotOkButtonClicked()
 {
     chipDbTableModel.commit();
 }
 
-void ParallelChipDbDialog::slotCancelButtonClicked()
+void SpiNorDbDialog::slotCancelButtonClicked()
 {
     chipDbTableModel.reset();
 }

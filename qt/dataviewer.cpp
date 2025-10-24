@@ -30,11 +30,7 @@ void DataViewer::init()
     }
     mBytesPerLine = 16;
 
-#if QT_VERSION >= QT_VERSION_CHECK(5, 11, 0)
     pxWidth = fontMetrics().horizontalAdvance(QChar('0'));
-#else
-    pxWidth = fontMetrics().width(QChar('0'));
-#endif
     pxHeight = fontMetrics().height() * 1.25;
 }
 

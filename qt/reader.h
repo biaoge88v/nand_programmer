@@ -7,7 +7,6 @@
 #define READER_H
 
 #include <QObject>
-#include "sync_buffer.h"
 #include "serial_port.h"
 
 class Reader : public QObject
@@ -17,9 +16,7 @@ class Reader : public QObject
     static const uint32_t bufSize = 4096;
 
     SerialPort *serialPort = nullptr;
-    QString portName;
-    qint32 baudRate;
-    SyncBuffer *rbuf;
+    QVector<uint8_t> *rbuf;
     quint64 rlen;
     const uint8_t *wbuf;
     uint32_t wlen;
@@ -31,8 +28,6 @@ class Reader : public QObject
     bool isReadLess;
     char pbuf[bufSize];
 
-    int serialPortCreate();
-    void serialPortDestroy();
     int write(const uint8_t *data, uint32_t len);
     int readStart();
     int read(char *pbuf, uint32_t len);
@@ -50,11 +45,10 @@ public:
     explicit Reader();
     ~Reader();
 
-    void init(const QString &portName, qint32 baudRate, SyncBuffer *rbuf,
+    void init(SerialPort *serialPort, QVector<uint8_t> *rbuf,
         quint64 rlen, const uint8_t *wbuf, uint32_t wlen, bool isSkipBB,
         bool isReadLess);
     void start();
-    void stop();
 signals:
     void result(quint64 ret);
     void progress(quint64 progress);

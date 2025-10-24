@@ -9,10 +9,8 @@
 
 #ifdef Q_OS_LINUX
   #define USB_DEV_NAME "/dev/ttyACM0"
-  #define SERIAL_PORT_SPEED 4000000
 #else
   #define USB_DEV_NAME "COM1"
-  #define SERIAL_PORT_SPEED 4000000
 #endif
 
 #define READ_TIMEOUT_MS 100
@@ -22,13 +20,16 @@
 Programmer::Programmer(QObject *parent) : QObject(parent)
 {
     usbDevName = USB_DEV_NAME;
-    skipBB = true;
-    incSpare = false;
+    skipBB = false;
+    incSpare = true;
     isConn = false;
     QObject::connect(&reader, SIGNAL(log(QtMsgType, QString)), this,
         SLOT(logCb(QtMsgType, QString)));
     QObject::connect(&writer, SIGNAL(log(QtMsgType, QString)), this,
         SLOT(logCb(QtMsgType, QString)));
+
+    QObject::connect(&serialPort, SIGNAL(closed(void)), this,
+        SLOT(disconnected(void)));
 }
 
 Programmer::~Programmer()
@@ -37,47 +38,40 @@ Programmer::~Programmer()
         disconnect();
 }
 
-int Programmer::serialPortConnect()
-{
-    if (!serialPort.start(usbDevName.toLatin1(), SERIAL_PORT_SPEED))
-        return -1;
-
-    return 0;
-}
-
-void Programmer::serialPortDisconnect()
-{
-    serialPort.stop();
-}
-
 void Programmer::connectCb(quint64 ret)
 {
-    QTimer::singleShot(0, &reader, &Reader::stop);
+    serialPort.stop();
     QObject::disconnect(&reader, SIGNAL(result(quint64)), this,
         SLOT(connectCb(quint64)));
 
-    memcpy(&fwVersion, buffer.buf.data(), sizeof(fwVersion));
+    memcpy(&fwVersion, buf.constData(), sizeof(fwVersion));
 
     if (ret == UINT64_MAX)
     {
-        qCritical() << "Failed to read firmware version";
+        qCritical() << "读取固件版本失败";
+        serialPort.close();
         return;
     }
 
     emit connectCompleted(ret);
 
     isConn = true;
-    qInfo() << "Firmware version: " <<
+    qInfo() << "固件版本: " <<
         fwVersionToString(fwVersion).toLatin1().data();
+}
+
+void Programmer::disconnected()
+{
+    isConn = false;
+    emit connectCompleted(-1);
 }
 
 int Programmer::connect()
 {
     Cmd cmd;
 
-    if (serialPortConnect())
+    if (!serialPort.open(usbDevName.toLatin1()))
         return -1;
-    serialPortDisconnect();
 
     QObject::connect(&reader, SIGNAL(result(quint64)), this,
         SLOT(connectCb(quint64)));
@@ -86,9 +80,9 @@ int Programmer::connect()
 
     writeData.clear();
     writeData.append(reinterpret_cast<const char *>(&cmd), sizeof(cmd));
-    buffer.buf.clear();
-    reader.init(usbDevName, SERIAL_PORT_SPEED,
-        &buffer, sizeof(fwVersion),
+    buf.clear();
+    reader.init(&serialPort, &buf,
+        sizeof(fwVersion),
         reinterpret_cast<const uint8_t *>(writeData.constData()),
         static_cast<uint32_t>(writeData.size()), false, false);
     reader.start();
@@ -98,6 +92,7 @@ int Programmer::connect()
 
 void Programmer::disconnect()
 {
+    serialPort.close();
     isConn = false;
 }
 
@@ -148,11 +143,11 @@ void Programmer::setHwEccEnabled(bool isHwEccEnabled)
 
 void Programmer::readChipIdCb(quint64 ret)
 {
-    QTimer::singleShot(0, &reader, &Reader::stop);
+    serialPort.stop();
     QObject::disconnect(&reader, SIGNAL(result(quint64)), this,
         SLOT(readChipIdCb(quint64)));
 
-    memcpy(chipId_p, buffer.buf.data(), sizeof(ChipId));
+    memcpy(chipId_p, buf.constData(), sizeof(ChipId));
 
     emit readChipIdCompleted(ret);
 }
@@ -168,12 +163,9 @@ void Programmer::readChipId(ChipId *chipId)
 
     writeData.clear();
     writeData.append(reinterpret_cast<const char *>(&cmd), sizeof(cmd));
-
     chipId_p = chipId;
-
-    buffer.buf.clear();
-    reader.init(usbDevName, SERIAL_PORT_SPEED,
-        &buffer, sizeof(ChipId),
+    buf.clear();
+    reader.init(&serialPort, &buf, sizeof(ChipId),
         reinterpret_cast<const uint8_t *>(writeData.constData()),
         static_cast<uint32_t>(writeData.size()), false, false);
     reader.start();
@@ -181,7 +173,7 @@ void Programmer::readChipId(ChipId *chipId)
 
 void Programmer::eraseChipCb(quint64 ret)
 {
-    QTimer::singleShot(0, &reader, &Reader::stop);
+    serialPort.stop();
     QObject::disconnect(&reader, SIGNAL(progress(quint64)), this,
         SLOT(eraseProgressChipCb(quint64)));
     QObject::disconnect(&reader, SIGNAL(result(quint64)), this,
@@ -212,7 +204,7 @@ void Programmer::eraseChip(quint64 addr, quint64 len)
     writeData.clear();
     writeData.append(reinterpret_cast<const char *>(&eraseCmd),
         sizeof(eraseCmd));
-    reader.init(usbDevName, SERIAL_PORT_SPEED, nullptr, 0,
+    reader.init(&serialPort, nullptr, 0,
         reinterpret_cast<const uint8_t *>(writeData.constData()),
         static_cast<uint32_t>(writeData.size()), skipBB, false);
     reader.start();
@@ -220,7 +212,7 @@ void Programmer::eraseChip(quint64 addr, quint64 len)
 
 void Programmer::readCb(quint64 ret)
 {
-    QTimer::singleShot(0, &reader, &Reader::stop);
+    serialPort.stop();
     QObject::disconnect(&reader, SIGNAL(progress(quint64)), this,
         SLOT(readProgressCb(quint64)));
     QObject::disconnect(&reader, SIGNAL(result(quint64)), this,
@@ -233,7 +225,7 @@ void Programmer::readProgressCb(quint64 progress)
     emit readChipProgress(progress);
 }
 
-void Programmer::readChip(SyncBuffer *buf, quint64 addr, quint64 len,
+void Programmer::readChip(QVector<uint8_t> *buf, quint64 addr, quint64 len,
     bool isReadLess)
 {
     ReadCmd readCmd;
@@ -251,7 +243,7 @@ void Programmer::readChip(SyncBuffer *buf, quint64 addr, quint64 len,
 
     writeData.clear();
     writeData.append(reinterpret_cast<const char *>(&readCmd), sizeof(readCmd));
-    reader.init(usbDevName, SERIAL_PORT_SPEED, buf, len,
+    reader.init(&serialPort, buf, len,
         reinterpret_cast<const uint8_t *>(writeData.constData()),
         static_cast<uint32_t>(writeData.size()), skipBB,
         isReadLess);
@@ -260,7 +252,7 @@ void Programmer::readChip(SyncBuffer *buf, quint64 addr, quint64 len,
 
 void Programmer::writeCb(int ret)
 {
-    QTimer::singleShot(0, &writer, &Writer::stop);
+    serialPort.stop();
     QObject::disconnect(&writer, SIGNAL(progress(quint64)), this,
         SLOT(writeProgressCb(quint64)));
     QObject::disconnect(&writer, SIGNAL(result(int)), this, SLOT(writeCb(int)));
@@ -272,14 +264,14 @@ void Programmer::writeProgressCb(quint64 progress)
     emit writeChipProgress(progress);
 }
 
-void Programmer::writeChip(SyncBuffer *buf, quint64 addr, quint64 len,
+void Programmer::writeChip(QVector<uint8_t> *buf, quint64 addr, quint64 len,
     uint32_t pageSize)
 {
     QObject::connect(&writer, SIGNAL(result(int)), this, SLOT(writeCb(int)));
     QObject::connect(&writer, SIGNAL(progress(quint64)), this,
         SLOT(writeProgressCb(quint64)));
 
-    writer.init(usbDevName, SERIAL_PORT_SPEED, buf, addr, len, pageSize,
+    writer.init(&serialPort, buf, addr, len, pageSize,
         skipBB, incSpare, enableHwEcc, CMD_NAND_WRITE_S, CMD_NAND_WRITE_D,
         CMD_NAND_WRITE_E);
     writer.start();
@@ -287,7 +279,7 @@ void Programmer::writeChip(SyncBuffer *buf, quint64 addr, quint64 len,
 
 void Programmer::readChipBadBlocksCb(quint64 ret)
 {
-    QTimer::singleShot(0, &reader, &Reader::stop);
+    serialPort.stop();
     QObject::disconnect(&reader, SIGNAL(result(quint64)), this,
         SLOT(readChipBadBlocksCb(quint64)));
     QObject::disconnect(&reader, SIGNAL(progress(quint64)), this,
@@ -313,7 +305,7 @@ void Programmer::readChipBadBlocks()
 
     writeData.clear();
     writeData.append(reinterpret_cast<const char *>(&cmd), sizeof(cmd));
-    reader.init(usbDevName, SERIAL_PORT_SPEED, nullptr, 0,
+    reader.init(&serialPort, nullptr, 0,
         reinterpret_cast<const uint8_t *>(writeData.constData()),
         static_cast<uint32_t>(writeData.size()), false, false);
     reader.start();
@@ -321,7 +313,7 @@ void Programmer::readChipBadBlocks()
 
 void Programmer::confChipCb(quint64 ret)
 {
-    QTimer::singleShot(0, &reader, &Reader::stop);
+    serialPort.stop();
     QObject::disconnect(&reader, SIGNAL(result(quint64)), this,
         SLOT(confChipCb(quint64)));
     emit confChipCompleted(ret);
@@ -345,7 +337,7 @@ void Programmer::confChip(ChipInfo *chipInfo)
     writeData.clear();
     writeData.append(reinterpret_cast<const char *>(&confCmd), sizeof(confCmd));
     writeData.append(chipInfo->getHalConf());
-    reader.init(usbDevName, SERIAL_PORT_SPEED, nullptr, 0,
+    reader.init(&serialPort, nullptr, 0,
         reinterpret_cast<const uint8_t *>(writeData.constData()),
         static_cast<uint32_t>(writeData.size()), false, false);
     reader.start();
@@ -386,7 +378,7 @@ int Programmer::firmwareImageRead()
     QFile file(firmwareFileName);
     if (!file.open(QIODevice::ReadOnly))
     {
-        qCritical() << "Failed to open file:" << firmwareFileName <<
+        qCritical() << "无法打开文件:" << firmwareFileName <<
             ", error:" << file.errorString();
         goto Error;
     }
@@ -395,8 +387,8 @@ int Programmer::firmwareImageRead()
     if (fileSize != (firmwareImage[FIRMWARE_IMAGE_LAST - 1].offset +
         firmwareImage[FIRMWARE_IMAGE_LAST - 1].size))
     {
-        qCritical() << "Firmware image " << firmwareFileName <<
-            " size " << fileSize << "is invalid, expected " << 256 * 1024;
+        qCritical() << "固件映像 " << firmwareFileName <<
+            " size " << fileSize << "无效，预期 " << 256 * 1024;
         goto Error;
     }
 
@@ -404,24 +396,24 @@ int Programmer::firmwareImageRead()
         FIRMWARE_IMAGE_1;
     updateImageSize = firmwareImage[updateImage].size;
     updateImageOffset = firmwareImage[updateImage].offset;
-    firmwareBuffer.resize(updateImageSize);
+    buf.resize(updateImageSize);
 
     if (!file.seek(updateImageOffset))
     {
-        qCritical() << "Failed to seek firmware image " << firmwareFileName;
+        qCritical() << "无法查找固件映像 " << firmwareFileName;
         goto Error;
     }
 
-    if ((ret = file.read((char *)firmwareBuffer.data(), updateImageSize)) < 0)
+    if ((ret = file.read((char *)buf.data(), updateImageSize)) < 0)
     {
-        qCritical() << "Failed to read firmware image " << firmwareFileName <<
+        qCritical() << "读取固件映像失败 " << firmwareFileName <<
             ", error:" << file.errorString();
         goto Error;
     }
 
     if (ret != updateImageSize)
     {
-        qCritical() << "Firmware image " << firmwareFileName <<
+        qCritical() << "固件映像 " << firmwareFileName <<
             " was partially read, length" << ret;
         goto Error;
     }
@@ -429,7 +421,7 @@ int Programmer::firmwareImageRead()
     return 0;
 
 Error:
-    firmwareBuffer.clear();
+    buf.clear();
     emit firmwareUpdateCompleted(-1);
     return -1;
 }
@@ -438,24 +430,18 @@ void Programmer::firmwareUpdateProgressCb(quint64 progress)
 {
     emit firmwareUpdateProgress(progress * 100ULL /
         firmwareImage[updateImage].size);
-
-    std::copy(firmwareBuffer.begin() + progress, firmwareBuffer.begin() +
-        progress + flashPageSize, buffer.buf.begin());
-    // Notify writer that new data is ready
-    buffer.ready = true;
-    buffer.cv.notify_one();
+    memcpy(buf.data(), buf.data() + progress, flashPageSize);
 }
 
 void Programmer::firmwareUpdateCb(int ret)
 {
-    QTimer::singleShot(0, &writer, &Writer::stop);
+    serialPort.stop();
     QObject::disconnect(&writer, SIGNAL(progress(quint64)), this,
         SLOT(firmwareUpdateProgressCb(quint64)));
     QObject::disconnect(&writer, SIGNAL(result(int)), this,
         SLOT(firmwareUpdateCb(int)));
 
-    buffer.buf.clear();
-    firmwareBuffer.clear();
+    buf.clear();
 
     emit firmwareUpdateCompleted(ret);
 }
@@ -473,13 +459,7 @@ void Programmer::firmwareUpdateStart()
     QObject::connect(&writer, SIGNAL(progress(quint64)), this,
         SLOT(firmwareUpdateProgressCb(quint64)));
 
-    buffer.buf.reserve(flashPageSize);
-    buffer.buf.resize(flashPageSize);
-    std::copy(firmwareBuffer.begin(), firmwareBuffer.begin() + flashPageSize,
-        buffer.buf.begin());
-    buffer.ready = true;
-    writer.init(usbDevName, SERIAL_PORT_SPEED,
-        &buffer,
+    writer.init(&serialPort, &buf,
         firmwareImage[updateImage].address, firmwareImage[updateImage].size,
         flashPageSize, 0, 0, 0, CMD_FW_UPDATE_S, CMD_FW_UPDATE_D,
         CMD_FW_UPDATE_E);
@@ -488,25 +468,25 @@ void Programmer::firmwareUpdateStart()
 
 void Programmer::getActiveImageCb(quint64 ret)
 {
-    QTimer::singleShot(0, &reader, &Reader::stop);
+    serialPort.stop();
     QObject::disconnect(&reader, SIGNAL(result(quint64)), this,
         SLOT(getActiveImageCb(quint64)));
 
-    activeImage = buffer.buf.at(0);
+    activeImage = buf[0];
 
     if (ret == UINT64_MAX)
     {
-        qCritical() << "Failed to get active firmware image";
+        qCritical() << "无法获取活动固件映像";
         goto Error;
     }
 
     if (activeImage >= FIRMWARE_IMAGE_LAST)
     {
-        qCritical() << "Wrong active firmware image: " << activeImage;
+        qCritical() << "活动固件映像错误: " << activeImage;
         goto Error;
     }
 
-    qInfo() << "Active firmware image: " << activeImage;
+    qInfo() << "活动固件映像: " << activeImage;
 
     // Wait reader stop
     QTimer::singleShot(50, this, &Programmer::firmwareUpdateStart);
@@ -529,9 +509,8 @@ void Programmer::firmwareUpdate(const QString &fileName)
 
     writeData.clear();
     writeData.append(reinterpret_cast<const char *>(&cmd), sizeof(cmd));
-
-    buffer.buf.clear();
-    reader.init(usbDevName, SERIAL_PORT_SPEED, &buffer,
+    buf.clear();
+    reader.init(&serialPort, &buf,
         sizeof(activeImage),
         reinterpret_cast<const uint8_t *>(writeData.constData()),
         static_cast<uint32_t>(writeData.size()), false, false);

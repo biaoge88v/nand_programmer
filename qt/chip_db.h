@@ -45,7 +45,7 @@ public:
     bool isOptParamValid(quint64 param, quint64 min, quint64 max);
 
     virtual QString getNameByChipId(uint32_t id1, uint32_t id2,
-        uint32_t id3, uint32_t id4, uint32_t id5) = 0;
+        uint32_t id3, uint32_t id4, uint32_t id5, uint32_t id6) = 0;
     QStringList getNames();
     ChipInfo *chipInfoGetById(int id);
     ChipInfo *chipInfoGetByName(QString name);

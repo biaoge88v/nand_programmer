@@ -48,6 +48,7 @@ public:
         CHIP_PARAM_ID3,
         CHIP_PARAM_ID4,
         CHIP_PARAM_ID5,
+        CHIP_PARAM_ID6,
         CHIP_PARAM_NUM,
     };
 

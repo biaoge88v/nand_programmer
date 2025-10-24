@@ -181,6 +181,10 @@ QVariant ParallelChipDbTableModel::data(const QModelIndex &index,
         chipDb->getHexStringFromOptParam(chipDb->getChipParam(index.row(),
             ParallelChipInfo::CHIP_PARAM_ID5), paramStr);
         return paramStr;
+    case ParallelChipDb::CHIP_PARAM_ID6:
+        chipDb->getHexStringFromOptParam(chipDb->getChipParam(index.row(),
+            ParallelChipInfo::CHIP_PARAM_ID6), paramStr);
+        return paramStr;
     }
 
     return QVariant();
@@ -275,6 +279,8 @@ QVariant ParallelChipDbTableModel::headerData(int section,
             return tr("ID 4");
         case ParallelChipDb::CHIP_PARAM_ID5:
             return tr("ID 5");
+        case ParallelChipDb::CHIP_PARAM_ID6:
+            return tr("ID 6");
         }
     }
 
@@ -366,6 +372,8 @@ QVariant ParallelChipDbTableModel::headerData(int section,
             return tr("Chip ID 4th byte");
         case ParallelChipDb::CHIP_PARAM_ID5:
             return tr("Chip ID 5th byte");
+        case ParallelChipDb::CHIP_PARAM_ID6:
+            return tr("Chip ID 6th byte");
         }
     }
 
@@ -674,6 +682,14 @@ bool ParallelChipDbTableModel::setData(const QModelIndex &index,
             return false;
         chipDb->setChipParam(index.row(),
             ParallelChipInfo::CHIP_PARAM_ID5, paramVal);
+        return true;
+    case ParallelChipDb::CHIP_PARAM_ID6:
+        if (chipDb->getOptParamFromHexString(value.toString(), paramVal))
+            return false;
+        if (!chipDb->isOptParamValid(paramVal, 0x00, 0xFF))
+            return false;
+        chipDb->setChipParam(index.row(),
+            ParallelChipInfo::CHIP_PARAM_ID6, paramVal);
         return true;
     }
 

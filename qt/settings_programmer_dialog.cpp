@@ -85,11 +85,7 @@ void SettingsProgrammerDialog::fillPortsInfo()
         description = info.description();
         manufacturer = info.manufacturer();
         serialNumber = info.serialNumber();
- #ifdef Q_OS_WIN32
         list << info.portName()
- #else
-        list << info.systemLocation()
- #endif
              << (!description.isEmpty() ? description : blankString)
              << (!manufacturer.isEmpty() ? manufacturer : blankString)
              << (info.vendorIdentifier() ? QString::number(info.vendorIdentifier(), 16) : blankString)

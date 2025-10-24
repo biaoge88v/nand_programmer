@@ -64,7 +64,7 @@ typedef struct __attribute__((__packed__))
 typedef struct __attribute__((__packed__))
 {
     Cmd cmd;
-    uint8_t len;
+    uint16_t len;
 } WriteDataCmd;
 
 typedef struct __attribute__((__packed__))
@@ -113,12 +113,13 @@ typedef struct __attribute__((__packed__))
     uint8_t thirdId;
     uint8_t fourthId;
     uint8_t fifthId;
+    uint8_t sixthId;
 } ChipId;
 
 typedef struct __attribute__((__packed__))
 {
     uint8_t code;
-    uint8_t info;
+    uint16_t info;
 } RespHeader;
 
 typedef struct __attribute__((__packed__))
@@ -133,8 +134,6 @@ typedef struct __attribute__((__packed__))
     ChipId nandId;
 } RespId;
 
-/* BB, write ack and error responses are aligned to the same size to avoid
- * receiver wait for additional data */
 typedef struct __attribute__((__packed__))
 {
     RespHeader header;
@@ -146,14 +145,12 @@ typedef struct __attribute__((__packed__))
 {
     RespHeader header;
     uint64_t ackBytes;
-    uint8_t dummy[4];
 } RespWriteAck;
 
 typedef struct __attribute__((__packed__))
 {
     RespHeader header;
     uint8_t errCode;
-    uint8_t dummy[11];
 } RespError;
 
 typedef struct __attribute__((__packed__))

@@ -11,7 +11,7 @@
    </rect>
   </property>
   <property name="windowTitle">
-   <string>Programmer Settings</string>
+   <string>编程器设置</string>
   </property>
   <layout class="QGridLayout" name="gridLayout_2">
    <item row="0" column="0">
@@ -19,27 +19,27 @@
      <item row="3" column="0">
       <widget class="QCheckBox" name="enableHwEccCheckBox">
        <property name="text">
-        <string>Enable HW ECC</string>
+        <string>启用硬件 ECC</string>
        </property>
       </widget>
      </item>
      <item row="1" column="0">
       <widget class="QCheckBox" name="skipBBCheckBox">
        <property name="text">
-        <string>Skip bad blocks</string>
+        <string>跳过坏块                 提示：《读写不要勾选》</string>
        </property>
        <property name="checked">
-        <bool>true</bool>
+        <bool>false</bool>
        </property>
       </widget>
      </item>
      <item row="2" column="0">
       <widget class="QCheckBox" name="incSpareCheckBox">
        <property name="text">
-        <string>Include spare area</string>
+        <string>包括备用区               提示：《读写必须勾选》</string>
        </property>
        <property name="checked">
-        <bool>false</bool>
+        <bool>true</bool>
        </property>
       </widget>
      </item>
@@ -69,7 +69,7 @@
      <item row="4" column="0">
       <widget class="QCheckBox" name="enableAlertCheckBox">
        <property name="text">
-        <string>Alert after completion</string>
+        <string>完成后提醒</string>
        </property>
       </widget>
      </item>
@@ -84,7 +84,7 @@
           </sizepolicy>
          </property>
          <property name="text">
-          <string>USB device name</string>
+          <string>USB 设备名称</string>
          </property>
         </widget>
        </item>

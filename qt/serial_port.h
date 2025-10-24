@@ -6,47 +6,40 @@
 #ifndef SERIAL_PORT_H
 #define SERIAL_PORT_H
 
-#include <boost/asio.hpp>
-#include <boost/asio/serial_port.hpp>
-#include <boost/system/error_code.hpp>
-#include <boost/system/system_error.hpp>
-#include <boost/thread.hpp>
+#include <QObject>
+#include <QSerialPort>
+#include <QTimer>
 
-#include <iostream>
-
-typedef boost::shared_ptr<boost::thread> thread_ptr;
-typedef boost::shared_ptr<boost::asio::serial_port> serial_port_ptr;
-typedef boost::shared_ptr<boost::asio::deadline_timer> timer_ptr;
-
-class SerialPort
+class SerialPort : public QObject
 {
-private:
-    boost::asio::io_service ioService;
-    thread_ptr thread;
-    serial_port_ptr port;
-    timer_ptr timer;
-    std::function<void(int)> readCb;
-
-    SerialPort(const SerialPort &p);
-    SerialPort &operator=(const SerialPort &p);
-
-    void onRead(const boost::system::error_code &ec, size_t bytesRead);
-    void onReadWithTimeout(const boost::system::error_code &ec,
-        size_t bytesRead);
-    void onTimeout(const boost::system::error_code &e);
+    Q_OBJECT
 
 public:
-    SerialPort();
-    virtual ~SerialPort();
+    explicit SerialPort(QObject *parent = nullptr);
+    ~SerialPort();
 
-    bool start(const char *portName, int baudRate);
+    bool open(const char *portName);
     void stop();
+    void close();
 
     int write(const char *buf, int size);
-    int read(char *buf, int size);
-    int asyncRead(char *buf, int size, std::function<void(int)> cb);
-    int asyncReadWithTimeout(char *buf, int size, std::function<void (int)> cb,
-        int timeout);
+    int asyncRead(char *buf, int size, std::function<void(int)> cb, int timeout);
+
+private:
+    int buf_size = 0;
+    int buf_index = 0;
+    char *buf_pointer = nullptr;
+    std::function<void(int)> readCb;
+    QSerialPort serialPort;
+    QTimer timer;
+
+private slots:
+    void handleReadyRead();
+    void handleTimeout();
+    void handleError(QSerialPort::SerialPortError error);
+
+signals:
+    void closed();
 };
 
 #endif // SERIAL_PORT_H
