@@ -223,6 +223,7 @@ static void nand_read_id(chip_id_t *nand_id)
 
     data = *((__IO uint32_t *)(Bank_NAND_ADDR | DATA_AREA) + 1);
     nand_id->fifth_id   = ADDR_1st_CYCLE(data);
+    nand_id->sixth_id   = ADDR_2nd_CYCLE(data);
 }
 
 static void nand_write_page_async(uint8_t *buf, uint32_t page,
@@ -510,4 +511,3 @@ flash_hal_t hal_fsmc =
     .is_bb_supported = nand_is_bb_supported,
     .enable_hw_ecc = nand_enable_hw_ecc,
 };
-

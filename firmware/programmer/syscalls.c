@@ -61,3 +61,8 @@ int _read(int file, char *ptr, int len)
 {
     return 0;
 }
+
+void abort(void)
+{
+	while(1);
+}

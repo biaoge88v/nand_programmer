@@ -40,6 +40,9 @@ typedef struct __attribute__((__packed__))
     uint8_t busy_bit;
     uint8_t busy_state;
     uint32_t freq;
+    uint8_t addr_bytes;        // 地址字节数：3或4
+    uint8_t enter_4byte_cmd;   // 进入4字节模式命令
+    uint8_t exit_4byte_cmd;    // 退出4字节模式命令
 } spi_conf_t;
 
 static spi_conf_t spi_conf;
@@ -131,6 +134,16 @@ static uint16_t spi_flash_get_baud_rate_prescaler(uint32_t spi_freq_khz)
         return SPI_BaudRatePrescaler_256;
 }
 
+static void spi_flash_send_address(uint32_t addr)
+{
+    if (spi_conf.addr_bytes >= 4)
+        spi_flash_send_byte(ADDR_4th_CYCLE(addr));
+    
+    spi_flash_send_byte(ADDR_3rd_CYCLE(addr));
+    spi_flash_send_byte(ADDR_2nd_CYCLE(addr));
+    spi_flash_send_byte(ADDR_1st_CYCLE(addr));
+}
+
 static int spi_flash_init(void *conf, uint32_t conf_size)
 {
     SPI_InitTypeDef spi_init;
@@ -159,11 +172,27 @@ static int spi_flash_init(void *conf, uint32_t conf_size)
     /* Enable SPI */
     SPI_Cmd(SPI1, ENABLE);
 
+    /* 进入4字节地址模式（如果需要） */
+    if (spi_conf.addr_bytes == 4 && spi_conf.enter_4byte_cmd != UNDEFINED_CMD)
+    {
+        spi_flash_select_chip();
+        spi_flash_send_byte(spi_conf.enter_4byte_cmd);
+        spi_flash_deselect_chip();
+    }
+
     return 0;
 }
 
 static void spi_flash_uninit()
 {
+    /* 退出4字节地址模式（如果需要） */
+    if (spi_conf.addr_bytes == 4 && spi_conf.exit_4byte_cmd != UNDEFINED_CMD)
+    {
+        spi_flash_select_chip();
+        spi_flash_send_byte(spi_conf.exit_4byte_cmd);
+        spi_flash_deselect_chip();
+    }
+
     spi_flash_gpio_uninit();
 
     /* Disable SPI */
@@ -240,8 +269,6 @@ static void spi_flash_read_id(chip_id_t *chip_id)
     chip_id->device_id = spi_flash_read_byte();
     chip_id->third_id = spi_flash_read_byte();
     chip_id->fourth_id = spi_flash_read_byte();
-    chip_id->fifth_id = spi_flash_read_byte();
-    chip_id->sixth_id = spi_flash_read_byte();
 
     spi_flash_deselect_chip();
 }
@@ -269,9 +296,7 @@ static void spi_flash_write_page_async(uint8_t *buf, uint32_t page,
 
     page = page << spi_conf.page_offset;
 
-    spi_flash_send_byte(ADDR_3rd_CYCLE(page));
-    spi_flash_send_byte(ADDR_2nd_CYCLE(page));
-    spi_flash_send_byte(ADDR_1st_CYCLE(page));
+    spi_flash_send_address(page);
 
     for (i = 0; i < page_size; i++)
         spi_flash_send_byte(buf[i]);
@@ -288,9 +313,7 @@ static uint32_t spi_flash_read_data(uint8_t *buf, uint32_t page,
 
     spi_flash_send_byte(spi_conf.read_cmd);
 
-    spi_flash_send_byte(ADDR_3rd_CYCLE(addr));
-    spi_flash_send_byte(ADDR_2nd_CYCLE(addr));
-    spi_flash_send_byte(ADDR_1st_CYCLE(addr));
+    spi_flash_send_address(addr);
 
     /* AT45DB requires write of dummy byte after address */
     spi_flash_send_byte(FLASH_DUMMY_BYTE);
@@ -325,9 +348,7 @@ static uint32_t spi_flash_erase_block(uint32_t page)
 
     spi_flash_send_byte(spi_conf.erase_cmd);
 
-    spi_flash_send_byte(ADDR_3rd_CYCLE(addr));
-    spi_flash_send_byte(ADDR_2nd_CYCLE(addr));
-    spi_flash_send_byte(ADDR_1st_CYCLE(addr));
+    spi_flash_send_address(addr);
 
     spi_flash_deselect_chip();
 
