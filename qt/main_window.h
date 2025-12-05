@@ -38,6 +38,7 @@ private:
     QFile workFile;
     quint64 areaSize;
     uint32_t pageSize;
+    bool isEmptyChip;
 
     void initBufTable();
     void resetBufTable();
@@ -68,6 +69,8 @@ private slots:
     void slotProgDetectChipReadChipIdCompleted(quint64 status);
     void slotProgFirmwareUpdateCompleted(int status);
     void slotProgFirmwareUpdateProgress(quint64 progress);
+    void slotProgCheckEmptyCompleted(quint64 readBytes);  
+    void slotProgCheckEmptyProgress(quint64 progress); 
     void slotSelectFilePath();
     void slotFilePathEditingFinished();
 
@@ -79,11 +82,13 @@ public slots:
     void slotProgVerify();
     void slotProgWrite();
     void slotProgReadBadBlocks();
+    void slotProgCheckEmpty();
     void slotSelectChip(int selectedChipNum);
     void slotDetectChip();
     void slotSettingsProgrammer();
     void slotSettingsParallelChipDb();
     void slotSettingsSpiChipDb();
+    void slotSettingsSpiNandDb();
     void slotAboutDialog();
     void slotFirmwareUpdateDialog();
 };
