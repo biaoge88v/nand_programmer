@@ -66,6 +66,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent),
     ui->lastSpinBox->setEnabled(false);
 
     prog = new Programmer(this);
+    connect(prog, SIGNAL(connectCompleted(quint64)), this,
+        SLOT(slotProgConnectCompleted(quint64)));
     updateProgSettings();
 
     updateChipList();
@@ -87,6 +89,8 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent),
         SLOT(slotProgWrite()));
     connect(ui->actionReadBadBlocks, SIGNAL(triggered()), this,
         SLOT(slotProgReadBadBlocks()));
+    connect(ui->actionCheckEmpty, SIGNAL(triggered()), this,  
+            SLOT(slotProgCheckEmpty()));
     connect(ui->actionProgrammer, SIGNAL(triggered()), this,
         SLOT(slotSettingsProgrammer()));
     connect(ui->actionParallelChipDb, SIGNAL(triggered()), this,
@@ -109,6 +113,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent),
     ui->filePathLineEdit->setText(settings.value(SETTINGS_WORK_FILE_PATH,
         ui->filePathLineEdit->text()).toString());
     ui->dataViewer->setFile(ui->filePathLineEdit->text());
+    isEmptyChip = true;  
 }
 
 MainWindow::~MainWindow()
@@ -677,6 +682,83 @@ void MainWindow::slotProgReadBadBlocks()
     prog->readChipBadBlocks();
 }
 
+void MainWindow::slotProgCheckEmptyCompleted(quint64 readBytes)
+{
+    Q_UNUSED(readBytes);
+
+    disconnect(prog, SIGNAL(readChipProgress(quint64)), this,
+               SLOT(slotProgCheckEmptyProgress(quint64)));
+    disconnect(prog, SIGNAL(readChipCompleted(quint64)), this,
+               SLOT(slotProgCheckEmptyCompleted(quint64)));
+
+    setProgress(100);
+    buffer.clear();
+
+    if (isEmptyChip)
+    {
+        qInfo() << "Check for emptiness completed: The chip is empty";
+    }
+    else
+    {
+        qInfo() << "Check for emptiness completed: The chip is not empty";
+    }
+}
+
+void MainWindow::slotProgCheckEmptyProgress(quint64 progress)
+{
+    uint32_t progressPercent;
+
+    progressPercent = progress * 100ULL / areaSize;
+    setProgress(progressPercent);
+
+    for (int i = 0; i < buffer.size(); i++)
+    {
+        if (buffer[i] != 0xFF)
+        {
+            isEmptyChip = false; 
+
+        }
+    }
+
+    buffer.clear();  
+}
+
+void MainWindow::slotProgCheckEmpty()
+{
+    int index = ui->chipSelectComboBox->currentIndex();
+    if (index <= CHIP_INDEX_DEFAULT)
+    {
+        qInfo() << "No chip selected";
+        QMessageBox::warning(this, tr("Warning"), tr("Please select the chip first"));
+        return;
+    }
+
+    isEmptyChip = true;
+
+    quint64 start_address =
+        ui->blockSizeValueLabel->text().toULongLong(nullptr, 16)
+        * ui->firstSpinBox->value();
+    areaSize =
+        ui->blockSizeValueLabel->text().toULongLong(nullptr, 16)
+            * (ui->lastSpinBox->value() + 1) - start_address;
+
+    if (!areaSize)
+    {
+        qCritical() << "The chip size is not set";
+        return;
+    }
+
+    qInfo() << "Start checking for empty operations ...";
+    setProgress(0);
+
+    connect(prog, SIGNAL(readChipCompleted(quint64)), this,
+            SLOT(slotProgCheckEmptyCompleted(quint64)));
+    connect(prog, SIGNAL(readChipProgress(quint64)), this,
+            SLOT(slotProgCheckEmptyProgress(quint64)));
+
+    buffer.clear();
+    prog->readChip(&buffer, start_address, areaSize, true);
+}
 void MainWindow::slotProgSelectCompleted(quint64 status)
 {
     disconnect(prog, SIGNAL(confChipCompleted(quint64)), this,
