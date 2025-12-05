@@ -355,7 +355,9 @@
    <addaction name="actionVerify"/>
    <addaction name="actionErase"/>
    <addaction name="actionReadBadBlocks"/>
+   <addaction name="actionCheckEmpty"/>
   </widget>
+  <widget class="QStatusBar" name="statusBar"/>
   <action name="actionReadId">
    <property name="enabled">
     <bool>false</bool>
@@ -412,6 +414,14 @@
    </property>
    <property name="text">
     <string>Read bad blocks</string>
+   </property>
+  </action>
+  <action name="actionCheckEmpty"> 
+   <property name="enabled">
+    <bool>false</bool>
+   </property>
+   <property name="text">
+    <string>Blank</string>
    </property>
   </action>
   <action name="actionParallelChipDb">
